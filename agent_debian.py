@@ -9,7 +9,6 @@ import threading
 import subprocess
 import logging
 
-sys.path.insert(0, "/opt")
 
 from agents_core import BaseAgent, AgentContext, Message, MessageType
 
