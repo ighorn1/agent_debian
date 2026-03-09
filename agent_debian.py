@@ -18,8 +18,13 @@ logger = logging.getLogger(__name__)
 class AgentDebian(BaseAgent):
     AGENT_TYPE = "debian"
     DESCRIPTION = (
-        "Administration système Debian : paquets apt, services systemd, "
-        "réseau, filesystem, processus, logs, conteneurs Docker/LXC, utilisateurs"
+        "Administration et surveillance du système local : "
+        "installer/supprimer/mettre à jour des paquets (apt install/remove/update/upgrade), "
+        "gérer les services systemd (start/stop/restart), "
+        "surveiller CPU/RAM/disque, consulter les logs, "
+        "gérer le réseau, les processus, les fichiers, les utilisateurs, "
+        "les conteneurs Docker/LXC. "
+        "À utiliser pour toute tâche système sur CE serveur."
     )
     DEFAULT_CONFIG_PATH = "/opt/agent_debian/config/config.json"
 
