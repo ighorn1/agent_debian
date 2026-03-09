@@ -1,0 +1,2 @@
+agents_core @ file:///opt/agents_core
+requests>=2.28

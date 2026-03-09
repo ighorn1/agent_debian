@@ -1,0 +1,18 @@
+[Unit]
+Description=Agent Debian — Administration système
+After=network.target mosquitto.service
+Wants=mosquitto.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/agent_debian
+ExecStart=/opt/agent_debian/venv/bin/python /opt/agent_debian/agent_debian.py
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=agent-debian
+
+[Install]
+WantedBy=multi-user.target
