@@ -4,7 +4,7 @@ Agent d'administration système. Gère les paquets, services, processus, fichier
 
 ## Rôle
 
-Toutes les tâches système sur **ce serveur** passent par cet agent : `apt install`, `systemctl restart`, surveillance disque/RAM, consultation des logs, gestion des crons, etc.
+Toutes les tâches système sur **ce serveur** passent par cet agent : `apt install`, `systemctl restart`, surveillance disque/RAM, consultation des logs, gestion des crons, exécution de scripts, etc.
 
 ## Installation
 
@@ -23,7 +23,7 @@ systemctl enable --now agent_debian
 | `apt` | Gestion des paquets (install, remove, update, upgrade, search) |
 | `systemd` | Contrôle des services (start, stop, restart, status, enable) |
 | `shell` | Exécution de commandes shell arbitraires |
-| `script` | Exécution de scripts multi-lignes |
+| `script` | Bibliothèque de scripts bash (save/list/show/exec/run/delete) |
 | `sysinfo` | CPU, RAM, disque, uptime |
 | `process` | Liste, kill, surveillance des processus |
 | `filesystem` | Lecture, écriture, liste, recherche de fichiers |
@@ -36,6 +36,20 @@ systemctl enable --now agent_debian
 | `mqtt_send` | Publication sur un topic MQTT |
 | `mqtt_subscribe` | Souscription dynamique à un topic MQTT |
 | `muc_send` | Message dans le groupe XMPP |
+
+## Bibliothèque de scripts
+
+Les scripts bash sont stockés dans `/opt/agent_debian/scripts/`. Ils peuvent être créés et exécutés depuis Nexus :
+
+```
+# Via Nexus
+/script save debian backup | #!/bin/bash\ntar -czf /tmp/backup.tgz /etc
+/script run debian backup
+/script schedule daily 03:00 debian backup
+/script list debian
+```
+
+Chaque exécution envoie une notification XMPP à l'admin via Nexus.
 
 ## Surveillance proactive
 
@@ -60,13 +74,15 @@ Les alertes sont envoyées automatiquement à Nexus via MQTT.
   "mqtt": { "host": "localhost", "port": 1883 },
   "llm": {
     "base_url": "http://192.168.7.119:11434",
-    "model": "ministral-3:latest",
+    "model": "qwen3:8b",
     "temperature": 0.3
   },
   "llm_profiles": {
-    "local": "ministral-3:latest",
+    "local": "qwen3:8b",
     "cloud": "gpt-oss:120b-cloud"
-  }
+  },
+  "use_omemo": true,
+  "use_llm_coordinator": true
 }
 ```
 
@@ -78,6 +94,7 @@ Les alertes sont envoyées automatiquement à Nexus via MQTT.
 /status   — État de la queue de tâches
 /pause    — Pause du traitement des tâches
 /resume   — Reprise
+/script   — Gestion de la bibliothèque de scripts bash
 ```
 
 ## Fichiers
@@ -85,6 +102,7 @@ Les alertes sont envoyées automatiquement à Nexus via MQTT.
 ```
 agent_debian.py       — Point d'entrée
 skills/               — 16 skills système
+scripts/              — Scripts bash persistants
 config/               — Configuration et system prompt
 agent_debian.service  — Unit systemd
 ```
