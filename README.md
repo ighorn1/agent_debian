@@ -23,7 +23,7 @@ systemctl enable --now agent_debian
 | `apt` | Gestion des paquets (install, remove, update, upgrade, search) |
 | `systemd` | Contrôle des services (start, stop, restart, status, enable) |
 | `shell` | Exécution de commandes shell arbitraires |
-| `script` | Bibliothèque de scripts bash (save/list/show/exec/run/delete) |
+| `script` | Bibliothèque de scripts bash (save/list/show/edit/exec/run/delete) |
 | `sysinfo` | CPU, RAM, disque, uptime |
 | `process` | Liste, kill, surveillance des processus |
 | `filesystem` | Lecture, écriture, liste, recherche de fichiers |
@@ -50,6 +50,17 @@ Les scripts bash sont stockés dans `/opt/agent_debian/scripts/`. Ils peuvent ê
 ```
 
 Chaque exécution envoie une notification XMPP à l'admin via Nexus.
+
+**Règles de nommage** : les noms sont normalisés (extensions strip automatique, `.service`/`.timer`/`.py`… interdits). Le contenu doit contenir au moins une commande réelle.
+
+## Confirmations requises
+
+Les actions suivantes demandent confirmation avant exécution (requêtes XMPP directes uniquement) :
+
+- **cron** : `add`, `remove`, `clear`
+- **systemd** : `start`, `stop`, `restart`, `enable`, `disable`, `mask`, `unmask`, `daemon-reload`
+
+Répondre `oui` pour confirmer ou `non` pour annuler.
 
 ## Surveillance proactive
 

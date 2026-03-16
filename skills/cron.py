@@ -15,6 +15,15 @@ DESCRIPTION = "Gestion des tâches cron (crontab)"
 USAGE = "SKILL:cron ARGS:list | add <* * * * *> <commande> | remove <pattern> | system-list"
 
 
+def _confirm_or_execute(context, description: str, action_fn) -> str:
+    """Demande confirmation si requête XMPP directe, sinon exécute immédiatement."""
+    sender = getattr(context.agent, '_last_xmpp_sender', '')
+    if not sender:
+        return action_fn()
+    context.agent._pending_confirmations[sender] = {"description": description, "fn": action_fn}
+    return f"⚠️ Confirmation requise :\n{description}\n\nRéponds **oui** pour confirmer ou **non** pour annuler."
+
+
 def _run(cmd: str, timeout: int = 10) -> str:
     try:
         result = subprocess.run(
@@ -38,8 +47,6 @@ def run(args: str, context) -> str:
         return result if result else "Crontab vide."
 
     if action == "add":
-        # Format attendu : "* * * * * commande"
-        # On split les 5 premiers champs (expression cron) + le reste (commande)
         words = rest.split()
         if len(words) < 6:
             return "Format : add <min> <heure> <jour> <mois> <jourSem> <commande>\nEx: add 0 3 * * * /usr/bin/apt-get update"
@@ -47,39 +54,48 @@ def run(args: str, context) -> str:
         command   = " ".join(words[5:])
         entry     = f"{cron_expr} {command}"
 
-        # Récupère le crontab actuel, ajoute la ligne
         current = _run("crontab -l 2>/dev/null")
         if entry in current:
             return f"Cette entrée existe déjà : {entry}"
 
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".cron", delete=False) as f:
-            if current and "no crontab" not in current.lower():
-                f.write(current + "\n")
-            f.write(entry + "\n")
-            tmpfile = f.name
+        def _do_add():
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".cron", delete=False) as f:
+                if current and "no crontab" not in current.lower():
+                    f.write(current + "\n")
+                f.write(entry + "\n")
+                tmpfile = f.name
+            out = _run(f"crontab {tmpfile}")
+            os.unlink(tmpfile)
+            return f"Entrée ajoutée : {entry}\n{out}"
 
-        out = _run(f"crontab {tmpfile}")
-        os.unlink(tmpfile)
-        return f"Entrée ajoutée : {entry}\n{out}"
+        return _confirm_or_execute(context, f"Ajouter cron : {entry}", _do_add)
 
     if action == "remove":
         if not rest:
             return "Précise le pattern à supprimer."
         current = _run("crontab -l 2>/dev/null")
         lines = [l for l in current.splitlines() if rest not in l]
-        new_cron = "\n".join(lines)
+        removed_count = len(current.splitlines()) - len(lines)
+        if removed_count == 0:
+            return f"Aucune entrée contenant '{rest}' trouvée."
 
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".cron", delete=False) as f:
-            f.write(new_cron + "\n")
-            tmpfile = f.name
+        def _do_remove():
+            new_cron = "\n".join(lines)
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".cron", delete=False) as f:
+                f.write(new_cron + "\n")
+                tmpfile = f.name
+            out = _run(f"crontab {tmpfile}")
+            os.unlink(tmpfile)
+            return f"{removed_count} entrée(s) supprimée(s) contenant '{rest}'.\n{out}"
 
-        out = _run(f"crontab {tmpfile}")
-        os.unlink(tmpfile)
-        removed = len(current.splitlines()) - len(lines)
-        return f"{removed} entrée(s) supprimée(s) contenant '{rest}'.\n{out}"
+        return _confirm_or_execute(context, f"Supprimer {removed_count} cron contenant '{rest}'", _do_remove)
 
     if action == "clear":
-        return _run("crontab -r 2>/dev/null && echo 'Crontab effacé'")
+        return _confirm_or_execute(
+            context,
+            "Effacer TOUT le crontab root (action irréversible)",
+            lambda: _run("crontab -r 2>/dev/null && echo 'Crontab effacé'")
+        )
 
     if action == "system-list":
         # Crons système dans /etc/cron.*

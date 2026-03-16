@@ -19,6 +19,18 @@ import subprocess
 DESCRIPTION = "Gestion des services systemd (start/stop/restart/status/logs/enable/disable)"
 USAGE = "SKILL:systemd ARGS:status <service> | start <service> | stop <service> | restart <service> | enable <service> | disable <service> | logs <service> [N] | list | failed"
 
+# Actions destructives qui nécessitent confirmation (lecture seule = pas de confirmation)
+_ACTIONS_REQUIRING_CONFIRMATION = {"start", "stop", "restart", "enable", "disable", "mask", "unmask", "daemon-reload"}
+
+
+def _confirm_or_execute(context, description: str, action_fn) -> str:
+    """Demande confirmation si requête XMPP directe, sinon exécute immédiatement."""
+    sender = getattr(context.agent, '_last_xmpp_sender', '')
+    if not sender:
+        return action_fn()
+    context.agent._pending_confirmations[sender] = {"description": description, "fn": action_fn}
+    return f"⚠️ Confirmation requise :\n{description}\n\nRéponds **oui** pour confirmer ou **non** pour annuler."
+
 
 def _run(cmd: str, timeout: int = 30) -> str:
     try:
@@ -47,23 +59,29 @@ def run(args: str, context) -> str:
     if action == "start":
         if not service:
             return "Précise le service."
-        out = _run(f"systemctl start {service}")
-        status = _run(f"systemctl is-active {service}")
-        return f"Démarrage de {service}... Statut : {status}\n{out}"
+        def _do():
+            out = _run(f"systemctl start {service}")
+            status = _run(f"systemctl is-active {service}")
+            return f"Démarrage de {service}... Statut : {status}\n{out}"
+        return _confirm_or_execute(context, f"Démarrer le service : {service}", _do)
 
     if action == "stop":
         if not service:
             return "Précise le service."
-        out = _run(f"systemctl stop {service}")
-        status = _run(f"systemctl is-active {service}")
-        return f"Arrêt de {service}... Statut : {status}\n{out}"
+        def _do():
+            out = _run(f"systemctl stop {service}")
+            status = _run(f"systemctl is-active {service}")
+            return f"Arrêt de {service}... Statut : {status}\n{out}"
+        return _confirm_or_execute(context, f"Arrêter le service : {service}", _do)
 
     if action == "restart":
         if not service:
             return "Précise le service."
-        out = _run(f"systemctl restart {service}")
-        status = _run(f"systemctl is-active {service}")
-        return f"Redémarrage de {service}... Statut : {status}\n{out}"
+        def _do():
+            out = _run(f"systemctl restart {service}")
+            status = _run(f"systemctl is-active {service}")
+            return f"Redémarrage de {service}... Statut : {status}\n{out}"
+        return _confirm_or_execute(context, f"Redémarrer le service : {service}", _do)
 
     if action == "reload":
         if not service:
@@ -73,22 +91,34 @@ def run(args: str, context) -> str:
     if action == "enable":
         if not service:
             return "Précise le service."
-        return _run(f"systemctl enable {service}")
+        return _confirm_or_execute(
+            context, f"Activer au démarrage : {service}",
+            lambda: _run(f"systemctl enable {service}")
+        )
 
     if action == "disable":
         if not service:
             return "Précise le service."
-        return _run(f"systemctl disable {service}")
+        return _confirm_or_execute(
+            context, f"Désactiver au démarrage : {service}",
+            lambda: _run(f"systemctl disable {service}")
+        )
 
     if action == "mask":
         if not service:
             return "Précise le service."
-        return _run(f"systemctl mask {service}")
+        return _confirm_or_execute(
+            context, f"Masquer (bloquer) le service : {service}",
+            lambda: _run(f"systemctl mask {service}")
+        )
 
     if action == "unmask":
         if not service:
             return "Précise le service."
-        return _run(f"systemctl unmask {service}")
+        return _confirm_or_execute(
+            context, f"Démasquer le service : {service}",
+            lambda: _run(f"systemctl unmask {service}")
+        )
 
     if action == "logs":
         if not service:
@@ -114,7 +144,10 @@ def run(args: str, context) -> str:
         return _run("systemctl list-units --state=failed --no-pager")
 
     if action == "daemon-reload":
-        return _run("systemctl daemon-reload")
+        return _confirm_or_execute(
+            context, "Recharger la configuration systemd (daemon-reload)",
+            lambda: _run("systemctl daemon-reload && echo 'daemon-reload effectué'")
+        )
 
     if action == "is-active":
         if not service:
