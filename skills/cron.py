@@ -35,6 +35,16 @@ def _run(cmd: str, timeout: int = 10) -> str:
         return str(e)
 
 
+def _get_current_crontab() -> str:
+    """Retourne le crontab actuel, ou chaîne vide si inexistant."""
+    result = subprocess.run(
+        "crontab -l", shell=True, text=True, capture_output=True
+    )
+    if result.returncode != 0:
+        return ""
+    return result.stdout.strip()
+
+
 def run(args: str, context) -> str:
     parts = args.strip().split(None, 1)
     action = parts[0].lower() if parts else "list"
@@ -54,26 +64,28 @@ def run(args: str, context) -> str:
         command   = " ".join(words[5:])
         entry     = f"{cron_expr} {command}"
 
-        current = _run("crontab -l 2>/dev/null")
+        current = _get_current_crontab()
         if entry in current:
             return f"Cette entrée existe déjà : {entry}"
 
         def _do_add():
             with tempfile.NamedTemporaryFile(mode="w", suffix=".cron", delete=False) as f:
-                if current and "no crontab" not in current.lower():
+                if current:
                     f.write(current + "\n")
                 f.write(entry + "\n")
                 tmpfile = f.name
-            out = _run(f"crontab {tmpfile}")
+            result = subprocess.run(f"crontab {tmpfile}", shell=True, text=True, capture_output=True)
             os.unlink(tmpfile)
-            return f"Entrée ajoutée : {entry}\n{out}"
+            if result.returncode != 0:
+                return f"❌ Erreur crontab : {(result.stdout + result.stderr).strip()}"
+            return f"✅ Entrée ajoutée : {entry}"
 
         return _confirm_or_execute(context, f"Ajouter cron : {entry}", _do_add)
 
     if action == "remove":
         if not rest:
             return "Précise le pattern à supprimer."
-        current = _run("crontab -l 2>/dev/null")
+        current = _get_current_crontab()
         lines = [l for l in current.splitlines() if rest not in l]
         removed_count = len(current.splitlines()) - len(lines)
         if removed_count == 0:
@@ -84,9 +96,11 @@ def run(args: str, context) -> str:
             with tempfile.NamedTemporaryFile(mode="w", suffix=".cron", delete=False) as f:
                 f.write(new_cron + "\n")
                 tmpfile = f.name
-            out = _run(f"crontab {tmpfile}")
+            result = subprocess.run(f"crontab {tmpfile}", shell=True, text=True, capture_output=True)
             os.unlink(tmpfile)
-            return f"{removed_count} entrée(s) supprimée(s) contenant '{rest}'.\n{out}"
+            if result.returncode != 0:
+                return f"❌ Erreur crontab : {(result.stdout + result.stderr).strip()}"
+            return f"✅ {removed_count} entrée(s) supprimée(s) contenant '{rest}'."
 
         return _confirm_or_execute(context, f"Supprimer {removed_count} cron contenant '{rest}'", _do_remove)
 
